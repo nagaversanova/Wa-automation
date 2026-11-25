@@ -221,7 +221,7 @@ function buildTools({ bookingEnabled, hasProducts }) {
 const MAX_TOOL_ROUNDS = 5;
 
 async function generateReplyWithTools({ userId, phone, contactName, systemInstruction, contents, tools, timezone = 'Asia/Kolkata' }) {
-    const callModel = () => callGeminiWithRetry(
+    const callModel = (useTools = true) => callGeminiWithRetry(
         userId,
         (client, model) => client.models.generateContent({
             model,
@@ -230,141 +230,154 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                 systemInstruction,
                 temperature: 0.5,
                 maxOutputTokens: 800,
-                tools
+                ...(useTools && tools ? { tools } : {})
             }
         }),
         'AI reply (tools)'
     );
 
-    let response = await callModel();
+    let response = await callModel(true);
     let productToSend = null;
 
-    for (let round = 0; response.functionCalls && response.functionCalls.length && round < MAX_TOOL_ROUNDS; round++) {
-        const call = response.functionCalls[0];
-        let result;
-        try {
-            if (call.name === 'check_availability') {
-                const rawDate = call.args && typeof call.args.date === 'string' ? call.args.date.trim() : null;
-                const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
-                const daysAhead = Math.min(Math.max(parseInt(call.args && call.args.daysAhead, 10) || 7, 1), 30);
-                const { settings, slots } = await getAvailableSlots(userId, { daysAhead, maxResults: 100, date });
-                result = slots.length
-                    ? {
-                        timezone: settings.timezone,
-                        slot_duration_minutes: settings.slotDurationMinutes,
-                        buffer_minutes: settings.bufferMinutes,
-                        slots: slots.map(s => ({ start_iso: s.startIso, label: s.label }))
-                    }
-                    : { slots: [], message: date ? `No open slots found on ${date}. Try another working day or call check_availability without a date to see upcoming days.` : 'No open slots found in that window — try a wider daysAhead (up to 30) or suggest the customer contact the business directly.' };
-            } else if (call.name === 'book_appointment') {
-                try {
-                    const appt = await bookAppointment(userId, {
-                        phone,
-                        contactName,
-                        startIso: call.args && call.args.start_iso,
-                        notes: call.args && call.args.notes,
-                        source: 'chatbot'
-                    });
-                    result = {
-                        booked: true,
-                        id: appt.id,
-                        label: formatInZone(new Date(appt.start_at), timezone),
-                        timezone,
-                        start_at: appt.start_at,
-                        end_at: appt.end_at
-                    };
-                } catch (bookErr) {
-                    result = { booked: false, error: bookErr.message };
+    async function executeToolCall(call) {
+        if (call.name === 'check_availability') {
+            const rawDate = call.args && typeof call.args.date === 'string' ? call.args.date.trim() : null;
+            const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+            const daysAhead = Math.min(Math.max(parseInt(call.args && call.args.daysAhead, 10) || 7, 1), 30);
+            const { settings, slots } = await getAvailableSlots(userId, { daysAhead, maxResults: 100, date });
+            return slots.length
+                ? {
+                    timezone: settings.timezone,
+                    slot_duration_minutes: settings.slotDurationMinutes,
+                    buffer_minutes: settings.bufferMinutes,
+                    slots: slots.map(s => ({ start_iso: s.startIso, label: s.label }))
                 }
-            } else if (call.name === 'get_my_appointments') {
-                const appointments = await getCustomerAppointments(userId, phone);
-                result = appointments.length
-                    ? { appointments }
-                    : { appointments: [], message: 'This customer has no confirmed appointments.' };
-            } else if (call.name === 'reschedule_appointment') {
-                try {
-                    const { oldAppointment, newAppointment } = await rescheduleAppointment(userId, {
-                        phone,
-                        contactName,
-                        appointmentId: call.args && call.args.appointment_id,
-                        newStartIso: call.args && call.args.new_start_iso,
-                        notes: call.args && call.args.notes,
-                        source: 'chatbot'
-                    });
-                    result = {
-                        rescheduled: true,
-                        old_appointment_id: oldAppointment ? oldAppointment.id : null,
-                        new_appointment_id: newAppointment.id,
-                        label: formatInZone(new Date(newAppointment.start_at), timezone),
-                        timezone,
-                        start_at: newAppointment.start_at,
-                        end_at: newAppointment.end_at
-                    };
-                } catch (resErr) {
-                    result = { rescheduled: false, error: resErr.message };
-                }
-            } else if (call.name === 'cancel_appointment') {
-                try {
-                    const cancelled = await cancelCustomerAppointment(userId, {
-                        phone,
-                        appointmentId: call.args && call.args.appointment_id
-                    });
-                    result = {
-                        cancelled: true,
-                        id: cancelled.id,
-                        label: formatInZone(new Date(cancelled.start_at), timezone),
-                        timezone,
-                        start_at: cancelled.start_at
-                    };
-                } catch (cancelErr) {
-                    result = { cancelled: false, error: cancelErr.message };
-                }
-            } else if (call.name === 'show_product') {
-                const prodId = parseInt(call.args && call.args.product_id, 10);
-                if (Number.isFinite(prodId) && prodId > 0) {
-                    const product = await getProductById(userId, prodId);
-                    if (product && (product.is_active === 1 || product.is_active === true)) {
-                        productToSend = product;
-                        result = {
-                            found: true,
-                            id: product.id,
-                            name: product.name,
-                            price: product.price,
-                            description: product.description,
-                            category: product.category,
-                            has_photo: !!product.image_path
-                        };
-                    } else {
-                        result = { found: false, message: `Product ID ${prodId} was not found or is currently hidden from AI.` };
-                    }
-                } else {
-                    result = { found: false, message: 'Invalid product_id.' };
-                }
-            } else {
-                result = { error: `Unknown tool: ${call.name}` };
+                : { slots: [], message: date ? `No open slots found on ${date}. Try another working day or call check_availability without a date to see upcoming days.` : 'No open slots found in that window — try a wider daysAhead (up to 30) or suggest the customer contact the business directly.' };
+        }
+        if (call.name === 'book_appointment') {
+            try {
+                const appt = await bookAppointment(userId, {
+                    phone,
+                    contactName,
+                    startIso: call.args && call.args.start_iso,
+                    notes: call.args && call.args.notes,
+                    source: 'chatbot'
+                });
+                return {
+                    booked: true,
+                    id: appt.id,
+                    label: formatInZone(new Date(appt.start_at), timezone),
+                    timezone,
+                    start_at: appt.start_at,
+                    end_at: appt.end_at
+                };
+            } catch (bookErr) {
+                return { booked: false, error: bookErr.message };
             }
-        } catch (toolErr) {
-            result = { error: toolErr.message || 'Tool call failed.' };
+        }
+        if (call.name === 'get_my_appointments') {
+            const appointments = await getCustomerAppointments(userId, phone);
+            return appointments.length
+                ? { appointments }
+                : { appointments: [], message: 'This customer has no confirmed appointments.' };
+        }
+        if (call.name === 'reschedule_appointment') {
+            try {
+                const { oldAppointment, newAppointment } = await rescheduleAppointment(userId, {
+                    phone,
+                    contactName,
+                    appointmentId: call.args && call.args.appointment_id,
+                    newStartIso: call.args && call.args.new_start_iso,
+                    notes: call.args && call.args.notes,
+                    source: 'chatbot'
+                });
+                return {
+                    rescheduled: true,
+                    old_appointment_id: oldAppointment ? oldAppointment.id : null,
+                    new_appointment_id: newAppointment.id,
+                    label: formatInZone(new Date(newAppointment.start_at), timezone),
+                    timezone,
+                    start_at: newAppointment.start_at,
+                    end_at: newAppointment.end_at
+                };
+            } catch (resErr) {
+                return { rescheduled: false, error: resErr.message };
+            }
+        }
+        if (call.name === 'cancel_appointment') {
+            try {
+                const cancelled = await cancelCustomerAppointment(userId, {
+                    phone,
+                    appointmentId: call.args && call.args.appointment_id
+                });
+                return {
+                    cancelled: true,
+                    id: cancelled.id,
+                    label: formatInZone(new Date(cancelled.start_at), timezone),
+                    timezone,
+                    start_at: cancelled.start_at
+                };
+            } catch (cancelErr) {
+                return { cancelled: false, error: cancelErr.message };
+            }
+        }
+        if (call.name === 'show_product') {
+            const prodId = parseInt(call.args && call.args.product_id, 10);
+            if (Number.isFinite(prodId) && prodId > 0) {
+                const product = await getProductById(userId, prodId);
+                if (product && (product.is_active === 1 || product.is_active === true)) {
+                    productToSend = product;
+                    return {
+                        found: true,
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        description: product.description,
+                        category: product.category,
+                        has_photo: !!product.image_path
+                    };
+                }
+                return { found: false, message: `Product ID ${prodId} was not found or is currently hidden from AI.` };
+            }
+            return { found: false, message: 'Invalid product_id.' };
+        }
+        return { error: `Unknown tool: ${call.name}` };
+    }
+
+    for (let round = 0; response.functionCalls && response.functionCalls.length && round < MAX_TOOL_ROUNDS; round++) {
+        const calls = response.functionCalls;
+        const responseParts = [];
+        for (const call of calls) {
+            let result;
+            try {
+                result = await executeToolCall(call);
+            } catch (toolErr) {
+                result = { error: toolErr.message || 'Tool call failed.' };
+            }
+            responseParts.push(createPartFromFunctionResponse(call.id, call.name, result));
         }
 
         const modelContent = (response.candidates && response.candidates[0] && response.candidates[0].content)
             ? response.candidates[0].content
-            : { role: 'model', parts: [createPartFromFunctionCall(call.name, call.args || {})] };
+            : { role: 'model', parts: calls.map(c => createPartFromFunctionCall(c.name, c.args || {})) };
         contents.push(modelContent);
-        contents.push({ role: 'user', parts: [createPartFromFunctionResponse(call.id, call.name, result)] });
+        contents.push({ role: 'user', parts: responseParts });
 
         try {
-            response = await callModel();
+            response = await callModel(true);
         } catch (roundErr) {
             console.warn('⚠️ Tool round error (non-fatal):', roundErr.message?.split('\n')[0]);
-            if (productToSend) {
-                text = `Here is our ${productToSend.name}${productToSend.price ? ` (${String(productToSend.price).startsWith('₹') ? '' : '₹'}${productToSend.price})` : ''}! ${productToSend.description || ''}`.trim();
-                break;
-            }
+            break;
         }
     }
 
     let text = extractText(response);
+    if ((!text || !String(text).trim()) && response.functionCalls && response.functionCalls.length && !productToSend) {
+        try {
+            const finalResp = await callModel(false);
+            text = extractText(finalResp);
+        } catch (_) {}
+    }
     if (!text || !String(text).trim()) {
         if (productToSend) {
             text = `Here is our ${productToSend.name}${productToSend.price ? ` (${String(productToSend.price).startsWith('₹') ? '' : '₹'}${productToSend.price})` : ''}! ${productToSend.description || ''}`.trim();
