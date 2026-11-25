@@ -506,6 +506,9 @@ function attachHandlers(userId, s, client) {
                     clearTimers(s);
                     s.currentQR = null;
                     await safeDestroyClient(s);
+                    // Remove the unauthenticated Chrome profile so the next Connect
+                    // starts clean instead of reusing stale /login/ cookies or IndexedDB.
+                    try { fs.rmSync(authDataPath(userId), { recursive: true, force: true }); } catch (_) {}
                     broadcastSSE(userId, { type: 'error', data: 'QR code timed out. Click Connect when ready to scan.' });
                 }
             }, 180000);
