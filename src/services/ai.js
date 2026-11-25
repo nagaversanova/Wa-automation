@@ -257,8 +257,10 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
         }
         if (call.name === 'book_appointment') {
             const reqIso = String((call.args && call.args.start_iso) || '').trim();
-            if (reqIso && bookedInTurn.has(reqIso)) {
-                return bookedInTurn.get(reqIso);
+            const ts = new Date(reqIso).getTime();
+            const key = Number.isFinite(ts) ? String(ts) : reqIso;
+            if (key && bookedInTurn.has(key)) {
+                return bookedInTurn.get(key);
             }
             try {
                 const appt = await bookAppointment(userId, {
@@ -276,9 +278,10 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                     start_at: appt.start_at,
                     end_at: appt.end_at
                 };
-                if (reqIso) bookedInTurn.set(reqIso, res);
+                if (key) bookedInTurn.set(key, res);
                 return res;
             } catch (bookErr) {
+                console.warn(`⚠️ [user ${userId}] book_appointment failed (${reqIso}):`, bookErr.message);
                 return { booked: false, error: bookErr.message };
             }
         }
@@ -290,8 +293,10 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
         }
         if (call.name === 'reschedule_appointment') {
             const reqIso = String((call.args && call.args.new_start_iso) || '').trim();
-            if (reqIso && bookedInTurn.has(reqIso)) {
-                return bookedInTurn.get(reqIso);
+            const ts = new Date(reqIso).getTime();
+            const key = Number.isFinite(ts) ? String(ts) : reqIso;
+            if (key && bookedInTurn.has(key)) {
+                return bookedInTurn.get(key);
             }
             try {
                 const { oldAppointment, newAppointment } = await rescheduleAppointment(userId, {
@@ -311,9 +316,10 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                     start_at: newAppointment.start_at,
                     end_at: newAppointment.end_at
                 };
-                if (reqIso) bookedInTurn.set(reqIso, res);
+                if (key) bookedInTurn.set(key, res);
                 return res;
             } catch (resErr) {
+                console.warn(`⚠️ [user ${userId}] reschedule_appointment failed (${reqIso}):`, resErr.message);
                 return { rescheduled: false, error: resErr.message };
             }
         }
