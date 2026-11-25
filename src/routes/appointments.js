@@ -51,9 +51,11 @@ router.put('/settings', writeLimiter, requireDurableWrite, asyncHandler(async (r
 router.get('/slots', asyncHandler(async (req, res) => {
     const daysAhead = req.query.daysAhead ? parseInt(req.query.daysAhead, 10) : undefined;
     const maxResults = req.query.maxResults ? parseInt(req.query.maxResults, 10) : undefined;
+    const date = typeof req.query.date === 'string' ? req.query.date.trim() : undefined;
     const data = await getAvailableSlots(req.user.id, {
         daysAhead: Number.isFinite(daysAhead) ? daysAhead : undefined,
-        maxResults: Number.isFinite(maxResults) ? maxResults : undefined
+        maxResults: Number.isFinite(maxResults) ? maxResults : undefined,
+        date
     });
     res.json({ success: true, data });
 }));
@@ -61,13 +63,17 @@ router.get('/slots', asyncHandler(async (req, res) => {
 // ─── Appointment list ───────────────────────────────────────────
 router.get('/', asyncHandler(async (req, res) => {
     const status = req.query.status === 'cancelled' ? 'cancelled' : req.query.status === 'confirmed' ? 'confirmed' : null;
-    const appointments = await listAppointments(req.user.id, { status });
-    const total = await countAppointments(req.user.id);
+    const [appointments, total, settings] = await Promise.all([
+        listAppointments(req.user.id, { status }),
+        countAppointments(req.user.id),
+        getSettings(req.user.id)
+    ]);
     res.json({
         success: true,
         data: {
             appointments,
-            total
+            total,
+            timezone: settings.timezone
         }
     });
 }));

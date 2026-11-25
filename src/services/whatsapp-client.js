@@ -616,20 +616,41 @@ function attachHandlers(userId, s, client) {
             if (!msg.body || msg.body.trim() === '') return;
             if (msg.fromMe) return;
 
-            // msg.from is "<digits>@c.us"; take the digits. A malformed
-            // address is dropped rather than passed downstream.
-            const phone = String(msg.from).split('@')[0];
+            // msg.from can be "<digits>@c.us" or "<lid>@lid" (Linked Device ID).
+            // Resolve @lid to the actual phone number so contacts, leads, and
+            // appointments store the real phone instead of a 14-digit LID.
+            const rawFrom = String(msg.from || '');
+            const rawDigits = rawFrom.split('@')[0];
+            let phone = rawDigits;
+            let contactName = '';
+
+            try {
+                const contact = await msg.getContact();
+                contactName = String(contact?.pushname || contact?.name || '').slice(0, 200);
+                const cNum = String(contact?.number || '').replace(/\D/g, '');
+                if (/^\d{7,15}$/.test(cNum)) {
+                    phone = cNum;
+                } else if (contact?.id?.server === 'c.us' && /^\d{7,15}$/.test(String(contact.id.user || ''))) {
+                    phone = String(contact.id.user);
+                }
+            } catch (e) { /* non-fatal */ }
+
+            if (rawFrom.endsWith('@lid') && phone === rawDigits && typeof client.getContactLidAndPhone === 'function') {
+                try {
+                    const resolved = await client.getContactLidAndPhone([rawFrom]);
+                    const pn = resolved && resolved[0] && resolved[0].pn;
+                    const pnDigits = pn ? String(pn).split('@')[0].replace(/\D/g, '') : '';
+                    if (/^\d{7,15}$/.test(pnDigits)) {
+                        phone = pnDigits;
+                    }
+                } catch (e) { /* non-fatal */ }
+            }
+
             if (!/^\d{7,15}$/.test(phone)) return;
 
             // Mark the session as active so the hibernation timer is re-armed.
             s.lastActivityAt = Date.now();
             armHibernationTimer(userId);
-
-            let contactName = '';
-            try {
-                const contact = await msg.getContact();
-                contactName = String(contact?.pushname || contact?.name || '').slice(0, 200);
-            } catch (e) { /* non-fatal */ }
 
             await Promise.race([
                 processMessage(userId, phone, msg.body, contactName, client, msg),

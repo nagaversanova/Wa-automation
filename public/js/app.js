@@ -47,11 +47,11 @@ async function refreshSession() {
 
 function updateTopBarUserInfo(user) {
     if (!user) return;
-    const nameEl   = document.getElementById('topbarUserName');
+    const nameEl = document.getElementById('topbarUserName');
     const avatarEl = document.getElementById('topbarAvatar');
     const adminNav = document.getElementById('nav-admin');
     const label = user.business_name || user.owner_name || user.email || 'Account';
-    if (nameEl)   nameEl.textContent = label;
+    if (nameEl) nameEl.textContent = label;
     if (avatarEl) avatarEl.textContent = label.slice(0, 2).toUpperCase();
     if (adminNav) adminNav.style.display = user.role === 'admin' ? '' : 'none';
 }
@@ -119,7 +119,7 @@ async function checkAuth() {
 }
 
 async function logout() {
-    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { }
     CURRENT_ACCESS_TOKEN = null;
     CURRENT_USER = null;
     window.location.href = '/login';
@@ -131,7 +131,7 @@ async function api(endpoint, options = {}) {
     if (CURRENT_ACCESS_TOKEN) {
         headers['Authorization'] = `Bearer ${CURRENT_ACCESS_TOKEN}`;
     }
-    
+
     let res;
     try {
         res = await fetch(`${API}${endpoint}`, {
@@ -142,7 +142,7 @@ async function api(endpoint, options = {}) {
         console.warn(`[API] Network failure on ${endpoint}:`, netErr.message);
         throw new Error('Network connection error. Please verify your connection.');
     }
-    
+
     if (res.status === 401) {
         console.debug(`[API] 401 received for ${endpoint}. Refreshing session...`);
         const refreshRes = await refreshSession();
@@ -285,14 +285,14 @@ function navigateTo(section) {
 function loadSectionData(section) {
     switch (section) {
         case 'dashboard': loadDashboard(); break;
-        case 'messages':  loadMessages();  break;
-        case 'leads':     loadLeads(); break;
-        case 'crm':       loadCrm(); break;
-        case 'chatbot':   loadChatbotRules(); break;
-        case 'contacts':  loadContacts(); break;
+        case 'messages': loadMessages(); break;
+        case 'leads': loadLeads(); break;
+        case 'crm': loadCrm(); break;
+        case 'chatbot': loadChatbotRules(); break;
+        case 'contacts': loadContacts(); break;
         case 'scheduled': loadScheduled(); break;
         case 'appointments': loadAppointments(); break;
-        case 'settings':  loadSettings(); break;
+        case 'settings': loadSettings(); break;
     }
 }
 
@@ -343,28 +343,28 @@ async function loadDashboard() {
         };
 
         // ── Messages ──
-        animateValue('valSentToday',        stats.sentToday);
-        animateValue('valReceivedToday',    stats.receivedToday);
-        animateValue('valTotalMessages',    stats.totalMessages);
+        animateValue('valSentToday', stats.sentToday);
+        animateValue('valReceivedToday', stats.receivedToday);
+        animateValue('valTotalMessages', stats.totalMessages);
         animateValue('valPendingScheduled', stats.pendingScheduled);
 
         // ── Leads ──
         const leads = stats.leads || {};
-        animateValue('valDashLeadsTotal',   leads.total || 0);
-        animateValue('valDashInterested',   leads.interested || 0);
+        animateValue('valDashLeadsTotal', leads.total || 0);
+        animateValue('valDashInterested', leads.interested || 0);
         animateValue('valDashHighPriority', leads.highPriority || 0);
-        animateValue('valDashAwaiting',     stats.awaitingAnalysis || 0);
+        animateValue('valDashAwaiting', stats.awaitingAnalysis || 0);
 
         // ── Sales pipeline ──
         const crm = stats.crm || {};
         const cur = stats.currency || '₹';
         setText('valDashPipeline', `${cur}${(parseFloat(crm.pipelineValue) || 0).toLocaleString('en-IN')}`);
         animateValue('valDashOpenDeals', crm.openDeals || 0);
-        animateValue('valDashWon',       crm.wonDeals || 0);
+        animateValue('valDashWon', crm.wonDeals || 0);
         animateValue('valDashFollowups', crm.followupsDue || 0);
 
         // ── Workspace ──
-        animateValue('valContacts',    stats.totalContacts);
+        animateValue('valContacts', stats.totalContacts);
         animateValue('valActiveRules', stats.activeRules);
 
         const waEl = document.getElementById('valWaStatus');
@@ -407,11 +407,11 @@ function animateValue(elementId, target) {
 async function loadMessages() {
     clearErrorBanner('messagesError');
     try {
-        const phone     = document.getElementById('messageSearch')?.value || '';
+        const phone = document.getElementById('messageSearch')?.value || '';
         const direction = document.getElementById('messageFilter')?.value || '';
 
         let endpoint = '/api/messages?limit=200';
-        if (phone)     endpoint += `&phone=${encodeURIComponent(phone)}`;
+        if (phone) endpoint += `&phone=${encodeURIComponent(phone)}`;
         if (direction) endpoint += `&direction=${direction}`;
 
         const messages = await api(endpoint);
@@ -454,16 +454,16 @@ async function loadMessages() {
 //  LEAD ANALYSIS
 // ═══════════════════════════════════════════════════════════
 const INTEREST_META = {
-    interested:     { label: () => Icon('check-circle') + ' Interested',     cls: 'lead-badge-interested' },
-    not_interested: { label: () => Icon('x-circle') + ' Not Interested',     cls: 'lead-badge-not-interested' },
-    neutral:        { label: () => Icon('minus-circle') + ' Neutral',        cls: 'lead-badge-neutral' },
-    unclear:        { label: () => Icon('help-circle') + ' Unclear',         cls: 'lead-badge-neutral' }
+    interested: { label: () => Icon('check-circle') + ' Interested', cls: 'lead-badge-interested' },
+    not_interested: { label: () => Icon('x-circle') + ' Not Interested', cls: 'lead-badge-not-interested' },
+    neutral: { label: () => Icon('minus-circle') + ' Neutral', cls: 'lead-badge-neutral' },
+    unclear: { label: () => Icon('help-circle') + ' Unclear', cls: 'lead-badge-neutral' }
 };
 
 const PRIORITY_META = {
-    high:   { label: () => Icon('flame') + ' High',           cls: 'lead-priority-high' },
-    medium: { label: () => Icon('zap') + ' Medium',            cls: 'lead-priority-medium' },
-    low:    { label: () => Icon('circle-dashed') + ' Low',     cls: 'lead-priority-low' }
+    high: { label: () => Icon('flame') + ' High', cls: 'lead-priority-high' },
+    medium: { label: () => Icon('zap') + ' Medium', cls: 'lead-priority-medium' },
+    low: { label: () => Icon('circle-dashed') + ' Low', cls: 'lead-priority-low' }
 };
 
 async function loadLeads() {
@@ -480,10 +480,10 @@ async function loadLeads() {
 
         const { leads, stats, pending } = await api(endpoint);
 
-        animateValue('valLeadsTotal',      stats.total);
+        animateValue('valLeadsTotal', stats.total);
         animateValue('valLeadsInterested', stats.interested);
-        animateValue('valLeadsHigh',       stats.highPriority);
-        animateValue('valLeadsPending',    pending.length);
+        animateValue('valLeadsHigh', stats.highPriority);
+        animateValue('valLeadsPending', pending.length);
 
         const container = document.getElementById('leadsList');
 
@@ -592,7 +592,7 @@ async function analyzeAllLeads() {
         const result = await api('/api/leads/analyze-all', { method: 'POST' });
         const failedNote = result.failed.length ? `, ${result.failed.length} failed` : '';
         showToast(`Analyzed ${result.analyzed} chat(s), ${result.skipped} already up to date${failedNote}.`,
-                  result.failed.length ? 'error' : 'success');
+            result.failed.length ? 'error' : 'success');
         loadLeads();
     } catch (err) {
         showToast(err.message || 'Bulk analysis failed', 'error');
@@ -606,13 +606,13 @@ async function analyzeAllLeads() {
 //  CRM
 // ═══════════════════════════════════════════════════════════
 const STAGE_META = {
-    new:         { text: 'New',          icon: 'circle-plus',    color: '#6B7280' },
-    contacted:   { text: 'Contacted',    icon: 'phone',          color: '#3B82F6' },
-    qualified:   { text: 'Qualified',    icon: 'star',           color: '#8B5CF6' },
-    proposal:    { text: 'Proposal',     icon: 'file-text',      color: '#F59E0B' },
-    negotiation: { text: 'Negotiation',  icon: 'handshake',      color: '#F97316' },
-    won:         { text: 'Won',          icon: 'trophy',         color: '#22C55E' },
-    lost:        { text: 'Lost',         icon: 'x-circle',       color: '#EF4444' }
+    new: { text: 'New', icon: 'circle-plus', color: '#6B7280' },
+    contacted: { text: 'Contacted', icon: 'phone', color: '#3B82F6' },
+    qualified: { text: 'Qualified', icon: 'star', color: '#8B5CF6' },
+    proposal: { text: 'Proposal', icon: 'file-text', color: '#F59E0B' },
+    negotiation: { text: 'Negotiation', icon: 'handshake', color: '#F97316' },
+    won: { text: 'Won', icon: 'trophy', color: '#22C55E' },
+    lost: { text: 'Lost', icon: 'x-circle', color: '#EF4444' }
 };
 // `label()` = icon + text (for headers/badges); plain `text` alone for <option> elements
 Object.values(STAGE_META).forEach(s => { s.label = () => Icon(s.icon) + ' ' + s.text; });
@@ -631,17 +631,17 @@ const CHART_INK = { text: '#23312A', sub: '#7B8378', grid: '#EFE8D8', surface: '
 const STAGE_RAMP = ['#79BF94', '#50AC76', '#2F8F58', '#1B7144', '#0D5231']; // ordinal: new → negotiation
 const OPEN_STAGES = ['new', 'contacted', 'qualified', 'proposal', 'negotiation'];
 const INTEREST_ORDER = [
-    { key: 'interested',     label: 'Interested',     color: '#1B9457' },
-    { key: 'unclear',        label: 'Unclear',        color: '#C99B2E' },
+    { key: 'interested', label: 'Interested', color: '#1B9457' },
+    { key: 'unclear', label: 'Unclear', color: '#C99B2E' },
     { key: 'not_interested', label: 'Not Interested', color: '#C4553D' },
-    { key: 'neutral',        label: 'Neutral',        color: '#5E7FBF' }
+    { key: 'neutral', label: 'Neutral', color: '#5E7FBF' }
 ];
 const ACTIVITY_COLORS = { outgoing: '#1B9457', incoming: '#3E7CB1' };
 
 let crmCharts = {};
 
 function destroyCrmCharts() {
-    Object.values(crmCharts).forEach(c => { try { c.destroy(); } catch (e) {} });
+    Object.values(crmCharts).forEach(c => { try { c.destroy(); } catch (e) { } });
     crmCharts = {};
 }
 
@@ -856,7 +856,7 @@ async function loadCrm() {
 
         document.getElementById('valCrmPipeline').textContent = fmtMoney(stats.pipelineValue);
         animateValue('valCrmOpen', stats.openDeals);
-        animateValue('valCrmWon',  stats.wonDeals);
+        animateValue('valCrmWon', stats.wonDeals);
         animateValue('valCrmFollowups', stats.followupsDue);
 
         if (analytics) renderCrmCharts(analytics);
@@ -941,16 +941,16 @@ async function openDealModal(phone) {
                     <label>Stage</label>
                     <select id="modalDealStage">
                         ${Object.keys(STAGE_META).map(s =>
-                            `<option value="${s}" ${deal.stage === s ? 'selected' : ''}>${STAGE_META[s].text}</option>`).join('')}
+            `<option value="${s}" ${deal.stage === s ? 'selected' : ''}>${STAGE_META[s].text}</option>`).join('')}
                     </select>
                     ${deal.ai_suggested_stage && deal.ai_suggested_stage !== deal.stage
-                        ? `<p class="form-text">${Icon('brain', 'icon-inline')}AI suggests: <strong>${escapeHtml(deal.ai_suggested_stage)}</strong></p>` : ''}
+                ? `<p class="form-text">${Icon('brain', 'icon-inline')}AI suggests: <strong>${escapeHtml(deal.ai_suggested_stage)}</strong></p>` : ''}
                 </div>
                 <div class="form-group">
                     <label>Deal Value (${escapeHtml(crmCurrency)})</label>
                     <input type="number" id="modalDealValue" value="${parseFloat(deal.deal_value) || 0}" min="0" step="any">
                     ${deal.ai_estimated_value && !parseFloat(deal.deal_value)
-                        ? `<p class="form-text">${Icon('brain', 'icon-inline')}AI estimate: ${fmtMoney(deal.ai_estimated_value)}</p>` : ''}
+                ? `<p class="form-text">${Icon('brain', 'icon-inline')}AI estimate: ${fmtMoney(deal.ai_estimated_value)}</p>` : ''}
                 </div>
                 <div class="form-group">
                     <label>Product / Service</label>
@@ -1021,12 +1021,12 @@ async function saveDealFromModal(dealId) {
         await api(`/api/crm/deals/${dealId}`, {
             method: 'PUT',
             body: JSON.stringify({
-                stage:            document.getElementById('modalDealStage').value,
-                deal_value:       document.getElementById('modalDealValue').value,
+                stage: document.getElementById('modalDealStage').value,
+                deal_value: document.getElementById('modalDealValue').value,
                 product_interest: document.getElementById('modalDealProduct').value,
                 next_followup_at: document.getElementById('modalDealFollowup').value
-                                    ? document.getElementById('modalDealFollowup').value.replace('T', ' ') : null,
-                notes:            document.getElementById('modalDealNotes').value
+                    ? document.getElementById('modalDealFollowup').value.replace('T', ' ') : null,
+                notes: document.getElementById('modalDealNotes').value
             })
         });
         showToast('Deal updated', 'success');
@@ -1077,12 +1077,12 @@ async function loadBusiness() {
             const el = document.getElementById(id);
             if (el) el.value = val || '';
         };
-        set('bizWebsite',     biz.website);
-        set('bizIndustry',    biz.industry);
+        set('bizWebsite', biz.website);
+        set('bizIndustry', biz.industry);
         set('bizDescription', biz.description);
-        set('bizTarget',      biz.targetCustomers);
-        set('bizCurrency',    biz.currency);
-        set('bizOffers',      biz.offers);
+        set('bizTarget', biz.targetCustomers);
+        set('bizCurrency', biz.currency);
+        set('bizOffers', biz.offers);
 
         renderProductList(biz.products || []);
         if (biz.aiProfile) renderBusinessProfile(biz.aiProfile);
@@ -1208,8 +1208,8 @@ function setupProductImageUploader(prefix) {
     });
 
     const changeBtn = document.getElementById(`${prefix}ImageChangeBtn`) ||
-                      document.getElementById(`${prefix}ImageReplaceBtn`) ||
-                      previewContainer?.querySelector('.btn-secondary');
+        document.getElementById(`${prefix}ImageReplaceBtn`) ||
+        previewContainer?.querySelector('.btn-secondary');
     changeBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         fileInput.click();
@@ -1538,9 +1538,9 @@ async function deleteRule(id) {
 }
 
 async function testChatbot() {
-    const input    = document.getElementById('testMessage');
+    const input = document.getElementById('testMessage');
     const resultEl = document.getElementById('testResult');
-    const text     = input.value.trim();
+    const text = input.value.trim();
 
     if (!text) { input.focus(); return; }
 
@@ -1589,15 +1589,15 @@ let LAST_LOADED_CONTACTS = [];
 async function loadContacts() {
     clearErrorBanner('contactsError');
     try {
-        const search   = document.getElementById('contactSearch')?.value || '';
-        let endpoint   = '/api/contacts';
+        const search = document.getElementById('contactSearch')?.value || '';
+        let endpoint = '/api/contacts';
         if (search) endpoint += `?search=${encodeURIComponent(search)}`;
 
         const contacts = await api(endpoint);
         LAST_LOADED_CONTACTS = contacts;
         SELECTED_CONTACTS.clear();
         updateSelectionBar();
-        const tbody    = document.getElementById('contactsBody');
+        const tbody = document.getElementById('contactsBody');
         const selectAll = document.getElementById('contactsSelectAll');
         if (selectAll) selectAll.checked = false;
 
@@ -1622,8 +1622,8 @@ async function loadContacts() {
                 <td style="color:var(--color-text-secondary)">${escapeHtml(c.phone)}</td>
                 <td>${c.label ? `<span class="badge badge-incoming">${escapeHtml(c.label)}</span>` : '—'}</td>
                 <td>${c.last_outreach_at
-                    ? `<span class="reached-pill" title="${formatDate(c.last_outreach_at)}">${Icon('check-circle')} ${formatDate(c.last_outreach_at)}</span>`
-                    : `<span class="not-reached-label">Not yet</span>`}</td>
+                ? `<span class="reached-pill" title="${formatDate(c.last_outreach_at)}">${Icon('check-circle')} ${formatDate(c.last_outreach_at)}</span>`
+                : `<span class="not-reached-label">Not yet</span>`}</td>
                 <td style="white-space:nowrap;color:var(--color-text-secondary)">${formatDate(c.created_at)}</td>
                 <td>
                     <button
@@ -1716,8 +1716,8 @@ window.deleteContact = deleteContact;
 function downloadCsvTemplate() {
     const csv = 'phone,name,label,notes\n919876543210,Jane Doe,Customer,Met at the trade show\n919812345678,John Smith,Lead,';
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url;
     a.download = 'contacts_template.csv';
     document.body.appendChild(a);
@@ -1752,8 +1752,8 @@ function handleCsvFileSelected(e) {
             });
             const parts = [];
             if (result.imported) parts.push(`${result.imported} added`);
-            if (result.updated)  parts.push(`${result.updated} updated`);
-            if (result.skipped)  parts.push(`${result.skipped} skipped`);
+            if (result.updated) parts.push(`${result.updated} updated`);
+            if (result.skipped) parts.push(`${result.skipped} skipped`);
             resultBox.innerHTML = `
                 <p style="color:var(--color-success);font-weight:600">
                     ${Icon('check-circle')} Import complete — ${parts.join(', ') || 'nothing to do'} (of ${result.total} rows).
@@ -1982,7 +1982,7 @@ function setupOutreachMediaAttachment() {
         e.preventDefault();
         if (CURRENT_OUTREACH_MEDIA?.filename) {
             const fname = CURRENT_OUTREACH_MEDIA.filename;
-            api(`/api/contacts/outreach/media/${encodeURIComponent(fname)}`, { method: 'DELETE' }).catch(() => {});
+            api(`/api/contacts/outreach/media/${encodeURIComponent(fname)}`, { method: 'DELETE' }).catch(() => { });
         }
         resetOutreachMediaUploader();
         showToast('Image removed', 'info');
@@ -2085,7 +2085,7 @@ async function submitOutreach() {
         document.getElementById('outreachProgressView').style.display = 'block';
         document.getElementById('outreachDoneBtn').style.display = 'none';
         document.getElementById('outreachProgressList').innerHTML = '';
-        
+
         let typeDescription = 'text message';
         if (mediaId && message) typeDescription = 'image with personalized caption';
         else if (mediaId) typeDescription = 'image message';
@@ -2136,7 +2136,7 @@ async function loadScheduled() {
     clearErrorBanner('scheduledError');
     try {
         const messages = await api('/api/scheduled');
-        const tbody    = document.getElementById('scheduledBody');
+        const tbody = document.getElementById('scheduledBody');
 
         if (messages.length === 0) {
             tbody.innerHTML = `
@@ -2164,8 +2164,8 @@ async function loadScheduled() {
                 </td>
                 <td>
                     ${msg.status === 'pending'
-                        ? `<button class="btn btn-sm btn-danger" data-action="cancel-scheduled" data-id="${msg.id}" aria-label="Cancel scheduled message" type="button">Cancel</button>`
-                        : '—'}
+                ? `<button class="btn btn-sm btn-danger" data-action="cancel-scheduled" data-id="${msg.id}" aria-label="Cancel scheduled message" type="button">Cancel</button>`
+                : '—'}
                 </td>
             </tr>
         `).join('');
@@ -2191,8 +2191,9 @@ async function cancelScheduled(id) {
 async function loadAppointments() {
     clearErrorBanner('appointmentsError');
     try {
-        const { appointments } = await api('/api/appointments');
+        const { appointments, timezone } = await api('/api/appointments');
         const tbody = document.getElementById('appointmentsBody');
+        const tz = timezone || undefined;
 
         if (appointments.length === 0) {
             tbody.innerHTML = `
@@ -2212,15 +2213,15 @@ async function loadAppointments() {
                         <strong>${escapeHtml(a.contact_name || a.phone)}</strong>
                         ${a.contact_name ? `<br><small style="color:var(--color-text-secondary)">${escapeHtml(a.phone)}</small>` : ''}
                     </td>
-                    <td style="white-space:nowrap;color:var(--color-text-secondary)">${formatDate(a.start_at)}</td>
+                    <td style="white-space:nowrap;color:var(--color-text-secondary)">${formatAppointmentRange(a.start_at, a.end_at, tz)}</td>
                     <td>${a.source === 'chatbot' ? Icon('bot', 'icon-inline') + ' Chatbot' : Icon('user', 'icon-inline') + ' Manual'}</td>
                     <td>
                         <span class="pill pill-${a.status === 'confirmed' ? 'active' : 'error'}">${escapeHtml(a.status)}</span>
                     </td>
                     <td>
                         ${a.status === 'confirmed'
-                            ? `<button class="btn btn-sm btn-danger" data-action="cancel-appointment" data-id="${a.id}" aria-label="Cancel appointment" type="button">Cancel</button>`
-                            : '—'}
+                    ? `<button class="btn btn-sm btn-danger" data-action="cancel-appointment" data-id="${a.id}" aria-label="Cancel appointment" type="button">Cancel</button>`
+                    : '—'}
                     </td>
                 </tr>
             `).join('');
@@ -2250,7 +2251,7 @@ async function loadApptSlotOptions() {
     if (!select) return;
     select.innerHTML = '<option value="">Loading available slots…</option>';
     try {
-        const { slots, settings } = await api('/api/appointments/slots?daysAhead=14&maxResults=30');
+        const { slots, settings } = await api('/api/appointments/slots?daysAhead=14&maxResults=100');
         if (!settings.bookingEnabled) {
             const notice = document.getElementById('apptBookingDisabledNotice');
             if (notice) notice.style.display = '';
@@ -2279,15 +2280,15 @@ async function loadSettings() {
             else el.value = val || '';
         };
 
-        set('settBusinessName',   settings.business_name);
+        set('settBusinessName', settings.business_name);
         set('settChatbotEnabled', settings.chatbot_enabled);
-        set('settDefaultReply',   settings.default_reply);
-        set('settAwayMode',       settings.away_mode);
-        set('settAwayMessage',    settings.away_message);
+        set('settDefaultReply', settings.default_reply);
+        set('settAwayMode', settings.away_mode);
+        set('settAwayMessage', settings.away_message);
         set('settWelcomeMessage', settings.welcome_message);
-        set('settAiEnabled',      settings.ai_enabled);
-        set('settOwnerName',      settings.owner_name);
-        set('settAiMode',         settings.ai_mode || 'ai_first');
+        set('settAiEnabled', settings.ai_enabled);
+        set('settOwnerName', settings.owner_name);
+        set('settAiMode', settings.ai_mode || 'ai_first');
         set('settAiSystemPrompt', settings.ai_system_prompt);
         const keyInput = document.getElementById('settGeminiApiKey');
         const statusBadge = document.getElementById('settGeminiApiKeyStatus');
@@ -2560,7 +2561,7 @@ function initSSE() {
 
     eventSource.onmessage = function (event) {
         try {
-            const data        = JSON.parse(event.data);
+            const data = JSON.parse(event.data);
             // Any event other than the initial 'loading' means SSE is working
             if (data.type !== 'loading') _sseReceivedActionable = true;
             applyConnectionState(data);
@@ -2609,13 +2610,13 @@ function stopStatusPolling() {
 }
 
 function applyConnectionState(data) {
-    const qrLoading   = document.getElementById('qrLoading');
-    const qrImage     = document.getElementById('qrImage');
-    const qrSuccess   = document.getElementById('qrSuccess');
+    const qrLoading = document.getElementById('qrLoading');
+    const qrImage = document.getElementById('qrImage');
+    const qrSuccess = document.getElementById('qrSuccess');
     const qrContainer = document.getElementById('qrContainer');
-    const statusDot   = document.querySelector('#connectionStatus .status-dot');
-    const statusText  = document.querySelector('#connectionStatus .status-text');
-    const connInfo    = document.getElementById('connectionInfo');
+    const statusDot = document.querySelector('#connectionStatus .status-dot');
+    const statusText = document.querySelector('#connectionStatus .status-text');
+    const connInfo = document.getElementById('connectionInfo');
 
     const show = (el) => { if (el) el.style.display = ''; };
     const hide = (el) => { if (el) el.style.display = 'none'; };
@@ -2628,23 +2629,23 @@ function applyConnectionState(data) {
         show(qrLoading); hide(qrImage); hide(qrSuccess);
         if (qrImage) { qrImage.src = data.data; qrImage.style.display = 'block'; }
         if (qrLoading) qrLoading.style.display = 'none';
-        if (statusDot)  statusDot.className  = 'status-dot error';
+        if (statusDot) statusDot.className = 'status-dot error';
         if (statusText) statusText.textContent = 'Scan QR Code';
-        if (connInfo)   connInfo.innerHTML   = `<p style="color:var(--color-warning)">${Icon('triangle-alert', 'icon-inline')}Waiting for QR Code scan. Go to Settings → WhatsApp QR.</p>`;
+        if (connInfo) connInfo.innerHTML = `<p style="color:var(--color-warning)">${Icon('triangle-alert', 'icon-inline')}Waiting for QR Code scan. Go to Settings → WhatsApp QR.</p>`;
 
     } else if (data.type === 'ready') {
         hide(qrLoading); hide(qrImage); show(qrSuccess);
-        if (statusDot)  statusDot.className  = 'status-dot connected';
+        if (statusDot) statusDot.className = 'status-dot connected';
         if (statusText) statusText.textContent = 'Connected';
-        if (connInfo)   connInfo.innerHTML   = `
+        if (connInfo) connInfo.innerHTML = `
             <p class="connected-text">${Icon('check-circle', 'icon-inline')}Connected to WhatsApp</p>
             <p>Phone: ${escapeHtml(data.phone || '')}</p>`;
 
     } else if (data.type === 'disconnected' || data.type === 'error') {
         hide(qrLoading); hide(qrImage); hide(qrSuccess);
-        if (statusDot)  statusDot.className  = 'status-dot error';
+        if (statusDot) statusDot.className = 'status-dot error';
         if (statusText) statusText.textContent = 'Disconnected';
-        if (connInfo)   connInfo.innerHTML   = `<p style="color:var(--color-error)">${Icon('x-circle', 'icon-inline')}Not connected</p>`;
+        if (connInfo) connInfo.innerHTML = `<p style="color:var(--color-error)">${Icon('x-circle', 'icon-inline')}Not connected</p>`;
 
         if (qrContainer && !document.getElementById('qrReconnectBtnContainer')) {
             const reconnectDiv = document.createElement('div');
@@ -2683,9 +2684,9 @@ function applyConnectionState(data) {
 
     } else if (data.type === 'loading') {
         show(qrLoading); hide(qrImage); hide(qrSuccess);
-        if (statusDot)  statusDot.className  = 'status-dot demo';
+        if (statusDot) statusDot.className = 'status-dot demo';
         if (statusText) statusText.textContent = 'Initializing…';
-        if (connInfo)   connInfo.innerHTML   = '<p>Loading WhatsApp Client…</p>';
+        if (connInfo) connInfo.innerHTML = '<p>Loading WhatsApp Client…</p>';
     }
 }
 
@@ -2708,10 +2709,48 @@ function jsAttr(str) {
     return escapeHtml(JSON.stringify(str == null ? '' : String(str)));
 }
 
+function parseUtcDate(dateStr) {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return isNaN(dateStr) ? null : dateStr;
+    let s = String(dateStr).trim();
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+        s = s.replace(' ', 'T');
+    }
+    if (!/[Z+-]\d{2}:?\d{2}$|Z$/i.test(s)) {
+        s += 'Z';
+    }
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+}
+
+function formatAppointmentRange(startStr, endStr, timeZone) {
+    const start = parseUtcDate(startStr);
+    if (!start) return '—';
+    const opts = {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        ...(timeZone ? { timeZone } : {})
+    };
+    const startLabel = new Intl.DateTimeFormat('en-IN', opts).format(start);
+    const end = parseUtcDate(endStr);
+    if (!end) return startLabel;
+    const endLabel = new Intl.DateTimeFormat('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        ...(timeZone ? { timeZone } : {})
+    }).format(end);
+    return `${startLabel} – ${endLabel}`;
+}
+
 function formatDate(dateStr) {
-    if (!dateStr) return '—';
-    const d = new Date(dateStr + (dateStr.includes('Z') || dateStr.includes('+') ? '' : 'Z'));
-    if (isNaN(d)) return '—';
+    const d = parseUtcDate(dateStr);
+    if (!d) return '—';
     return d.toLocaleDateString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
@@ -2723,10 +2762,10 @@ function timeAgo(dateStr) {
     const d = new Date(dateStr + (dateStr.includes('Z') || dateStr.includes('+') ? '' : 'Z'));
     if (isNaN(d)) return '';
     const diffMins = Math.floor((Date.now() - d) / 60000);
-    if (diffMins < 1)  return 'Just now';
+    if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     const diffHrs = Math.floor(diffMins / 60);
-    if (diffHrs < 24)  return `${diffHrs}h ago`;
+    if (diffHrs < 24) return `${diffHrs}h ago`;
     return `${Math.floor(diffHrs / 24)}d ago`;
 }
 
@@ -2894,8 +2933,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── Mobile menu ─────────────────────────────────────────
     const menuToggle = document.getElementById('menuToggle');
-    const sidebar    = document.getElementById('sidebar');
-    const overlay    = document.getElementById('overlay');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
 
     menuToggle.addEventListener('click', () => {
         const isOpen = sidebar.classList.toggle('open');
@@ -2927,7 +2966,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Quick send form ─────────────────────────────────────
     document.getElementById('quickSendForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const phone   = document.getElementById('qsPhone').value.trim();
+        const phone = document.getElementById('qsPhone').value.trim();
         const message = document.getElementById('qsMessage').value.trim();
         if (!phone || !message) return;
 
@@ -2941,8 +2980,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body: JSON.stringify({ phone, body: message })
             });
             showToast(`Message sent to ${phone}`, 'success');
-            document.getElementById('qsPhone').value    = '';
-            document.getElementById('qsMessage').value  = '';
+            document.getElementById('qsPhone').value = '';
+            document.getElementById('qsMessage').value = '';
             loadMessages();
         } catch (err) {
             showToast(err.message || 'Failed to send message', 'error');
@@ -2956,9 +2995,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('addRuleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const trigger_keyword = document.getElementById('ruleTrigger').value.trim();
-        const match_type      = document.getElementById('ruleMatchType').value;
-        const response_text   = document.getElementById('ruleResponse').value.trim();
-        const priority        = parseInt(document.getElementById('rulePriority').value) || 0;
+        const match_type = document.getElementById('ruleMatchType').value;
+        const response_text = document.getElementById('ruleResponse').value.trim();
+        const priority = parseInt(document.getElementById('rulePriority').value) || 0;
 
         if (!trigger_keyword || !response_text) return;
 
@@ -2993,7 +3032,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('addContactForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const phone = document.getElementById('contactPhone').value.trim();
-        const name  = document.getElementById('contactName').value.trim();
+        const name = document.getElementById('contactName').value.trim();
         const label = document.getElementById('contactLabel').value.trim();
 
         if (!phone) return;
@@ -3115,9 +3154,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 method: 'POST',
                 body: JSON.stringify({
                     phone,
-                    contact_name:     document.getElementById('dealName').value.trim(),
-                    deal_value:       document.getElementById('dealValue').value,
-                    stage:            document.getElementById('dealStage').value,
+                    contact_name: document.getElementById('dealName').value.trim(),
+                    deal_value: document.getElementById('dealValue').value,
+                    stage: document.getElementById('dealStage').value,
                     product_interest: document.getElementById('dealProduct').value.trim()
                 })
             });
@@ -3150,12 +3189,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             await api('/api/settings', {
                 method: 'PUT',
                 body: JSON.stringify({
-                    business_website:          document.getElementById('bizWebsite').value.trim(),
-                    business_industry:         document.getElementById('bizIndustry').value.trim(),
-                    business_description:      document.getElementById('bizDescription').value.trim(),
+                    business_website: document.getElementById('bizWebsite').value.trim(),
+                    business_industry: document.getElementById('bizIndustry').value.trim(),
+                    business_description: document.getElementById('bizDescription').value.trim(),
                     business_target_customers: document.getElementById('bizTarget').value.trim(),
-                    business_currency:         document.getElementById('bizCurrency').value.trim() || '₹',
-                    business_offers:           document.getElementById('bizOffers').value.trim()
+                    business_currency: document.getElementById('bizCurrency').value.trim() || '₹',
+                    business_offers: document.getElementById('bizOffers').value.trim()
                 })
             });
             showToast('Business profile saved! The AI will use it right away.', 'success');
@@ -3185,11 +3224,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 method: 'POST',
                 body: JSON.stringify({
                     name,
-                    price:       document.getElementById('prodPrice').value.trim(),
-                    category:    document.getElementById('prodCategory').value.trim(),
+                    price: document.getElementById('prodPrice').value.trim(),
+                    category: document.getElementById('prodCategory').value.trim(),
                     description: document.getElementById('prodDesc').value.trim(),
-                    url:         document.getElementById('prodUrl').value.trim(),
-                    image_path:  document.getElementById('prodImagePath')?.value?.trim() || ''
+                    url: document.getElementById('prodUrl').value.trim(),
+                    image_path: document.getElementById('prodImagePath')?.value?.trim() || ''
                 })
             });
             showToast('Added to catalog!', 'success');
@@ -3218,11 +3257,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 method: 'PUT',
                 body: JSON.stringify({
                     name,
-                    price:       document.getElementById('editProdPrice').value.trim(),
-                    category:    document.getElementById('editProdCategory').value.trim(),
+                    price: document.getElementById('editProdPrice').value.trim(),
+                    category: document.getElementById('editProdCategory').value.trim(),
                     description: document.getElementById('editProdDesc').value.trim(),
-                    url:         document.getElementById('editProdUrl').value.trim(),
-                    image_path:  document.getElementById('editProdImagePath')?.value?.trim() || ''
+                    url: document.getElementById('editProdUrl').value.trim(),
+                    image_path: document.getElementById('editProdImagePath')?.value?.trim() || ''
                 })
             });
             showToast('Product updated successfully!', 'success');
@@ -3282,9 +3321,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const phone          = document.getElementById('schedPhone').value.trim();
-        const body           = document.getElementById('schedMessage').value.trim();
-        const localValue     = document.getElementById('schedDate').value;
+        const phone = document.getElementById('schedPhone').value.trim();
+        const body = document.getElementById('schedMessage').value.trim();
+        const localValue = document.getElementById('schedDate').value;
 
         if (!phone || !body || !localValue) return;
 
@@ -3364,11 +3403,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             await api('/api/settings', {
                 method: 'PUT',
                 body: JSON.stringify({
-                    business_name:   document.getElementById('settBusinessName')?.value  || '',
+                    business_name: document.getElementById('settBusinessName')?.value || '',
                     chatbot_enabled: document.getElementById('settChatbotEnabled')?.checked ? 'true' : 'false',
-                    default_reply:   document.getElementById('settDefaultReply')?.value  || '',
-                    away_mode:       document.getElementById('settAwayMode')?.checked    ? 'true' : 'false',
-                    away_message:    document.getElementById('settAwayMessage')?.value   || '',
+                    default_reply: document.getElementById('settDefaultReply')?.value || '',
+                    away_mode: document.getElementById('settAwayMode')?.checked ? 'true' : 'false',
+                    away_message: document.getElementById('settAwayMessage')?.value || '',
                     welcome_message: document.getElementById('settWelcomeMessage')?.value || ''
                 })
             });
@@ -3383,10 +3422,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── Persona Preset buttons ──────────────────────────────
     const PRESETS = {
-        casual:       `You are a real, friendly AI chatting on WhatsApp on behalf of your owner.\n- Talk naturally, casually, and warmly, just like a real person texting on WhatsApp.\n- Keep responses short (1-3 sentences), concise, and conversational.\n- Answer questions directly, chat with friends or clients, and be helpful.\n- If someone asks personal details you don't know, politely say you'll let the owner know.\n- Use occasional emojis naturally 😊.`,
-        assistant:    `You are the personal AI assistant for your owner on WhatsApp.\n- Politely assist whoever is reaching out.\n- Help answer common questions, take down messages, or provide useful details.\n- If urgent, ask them to leave a clear note so the owner can follow up directly.\n- Maintain a polite, helpful, and organized tone.`,
+        casual: `You are a real, friendly AI chatting on WhatsApp on behalf of your owner.\n- Talk naturally, casually, and warmly, just like a real person texting on WhatsApp.\n- Keep responses short (1-3 sentences), concise, and conversational.\n- Answer questions directly, chat with friends or clients, and be helpful.\n- If someone asks personal details you don't know, politely say you'll let the owner know.\n- Use occasional emojis naturally 😊.`,
+        assistant: `You are the personal AI assistant for your owner on WhatsApp.\n- Politely assist whoever is reaching out.\n- Help answer common questions, take down messages, or provide useful details.\n- If urgent, ask them to leave a clear note so the owner can follow up directly.\n- Maintain a polite, helpful, and organized tone.`,
         professional: `You are an AI replying on WhatsApp for professional and business communications.\n- Respond with clarity, courtesy, and efficiency.\n- Keep answers crisp, structured, and informative.\n- If asked for estimates, bookings, or confidential info, politely request their contact details/requirements so the owner can review.`,
-        short:        `You are texting on WhatsApp on behalf of your owner.\n- Keep all replies extremely short (1 sentence or a few words max).\n- Direct, friendly, and concise. No fluff or extra explanations.`
+        short: `You are texting on WhatsApp on behalf of your owner.\n- Keep all replies extremely short (1 sentence or a few words max).\n- Direct, friendly, and concise. No fluff or extra explanations.`
     };
 
     document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -3408,9 +3447,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.textContent = 'Saving…';
         try {
             const payload = {
-                ai_enabled:       document.getElementById('settAiEnabled')?.checked   ? 'true' : 'false',
-                owner_name:       document.getElementById('settOwnerName')?.value     || '',
-                ai_mode:          document.getElementById('settAiMode')?.value        || 'ai_first',
+                ai_enabled: document.getElementById('settAiEnabled')?.checked ? 'true' : 'false',
+                owner_name: document.getElementById('settOwnerName')?.value || '',
+                ai_mode: document.getElementById('settAiMode')?.value || 'ai_first',
                 ai_system_prompt: document.getElementById('settAiSystemPrompt')?.value || ''
             };
 

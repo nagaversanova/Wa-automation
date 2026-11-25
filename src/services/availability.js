@@ -42,7 +42,8 @@ const MIN_SLOT_MINUTES = 5;
 const MAX_SLOT_MINUTES = 8 * 60;
 const MAX_DAYS_AHEAD = 30;
 const DEFAULT_DAYS_AHEAD = 7;
-const DEFAULT_MAX_RESULTS = 8;
+const DEFAULT_MAX_RESULTS = 50;
+const MAX_RESULTS_CAP = 200;
 // Don't offer a slot starting less than this soon — gives a real business
 // owner a moment's notice instead of "your appointment starts right now".
 const MIN_LEAD_MINUTES = 15;
@@ -133,19 +134,63 @@ function rangesOverlap(aStart, aEnd, bStart, bEnd) {
     return aStart < bEnd && aEnd > bStart;
 }
 
+function formatLocalDateKey(date, timeZone) {
+    const p = utcToZonedParts(date, timeZone);
+    return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
 /**
- * Live, bookable slots for the next `daysAhead` days: working hours minus
- * whatever's already booked internally and (best-effort) busy on Google
- * Calendar.
+ * Distributes slots evenly across all open days when there are more free slots
+ * than `maxResults`, so future days (2-7+ days ahead) are never starved by day 0/1.
  */
-async function getAvailableSlots(userId, { daysAhead = DEFAULT_DAYS_AHEAD, maxResults = DEFAULT_MAX_RESULTS } = {}) {
-    const days = Math.min(Math.max(1, Number(daysAhead) || DEFAULT_DAYS_AHEAD), MAX_DAYS_AHEAD);
+function pickSlotsAcrossDays(free, timeZone, maxResults) {
+    if (free.length <= maxResults) return free;
+    const byDay = new Map();
+    for (const slot of free) {
+        const key = formatLocalDateKey(slot.startUtc, timeZone);
+        if (!byDay.has(key)) byDay.set(key, []);
+        byDay.get(key).push(slot);
+    }
+    const picked = [];
+    const queues = Array.from(byDay.values());
+    let idx = 0;
+    while (picked.length < maxResults) {
+        let addedAny = false;
+        for (const q of queues) {
+            if (idx < q.length) {
+                picked.push(q[idx]);
+                addedAny = true;
+                if (picked.length >= maxResults) break;
+            }
+        }
+        if (!addedAny) break;
+        idx++;
+    }
+    picked.sort((a, b) => a.startUtc - b.startUtc);
+    return picked;
+}
+
+/**
+ * Live, bookable slots for the next `daysAhead` days (or a specific `date` YYYY-MM-DD):
+ * working hours minus whatever's already booked internally and (best-effort) busy on
+ * Google Calendar, respecting both slot duration and bufferMinutes.
+ */
+async function getAvailableSlots(userId, { daysAhead = DEFAULT_DAYS_AHEAD, maxResults = DEFAULT_MAX_RESULTS, date = null } = {}) {
+    const targetDate = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim()) ? date.trim() : null;
+    const days = targetDate
+        ? MAX_DAYS_AHEAD
+        : Math.min(Math.max(1, Number(daysAhead) || DEFAULT_DAYS_AHEAD), MAX_DAYS_AHEAD);
+    const cap = Math.min(Math.max(1, Number(maxResults) || DEFAULT_MAX_RESULTS), MAX_RESULTS_CAP);
     const settings = await getSettings(userId);
-    const candidates = generateCandidateSlots(settings, { daysAhead: days });
+    let candidates = generateCandidateSlots(settings, { daysAhead: days });
+    if (targetDate) {
+        candidates = candidates.filter(s => formatLocalDateKey(s.startUtc, settings.timezone) === targetDate);
+    }
     if (candidates.length === 0) return { settings, slots: [] };
 
-    const rangeStart = candidates[0].startUtc;
-    const rangeEnd = candidates[candidates.length - 1].endUtc;
+    const bufferMs = (settings.bufferMinutes || 0) * 60000;
+    const rangeStart = new Date(candidates[0].startUtc.getTime() - bufferMs);
+    const rangeEnd = new Date(candidates[candidates.length - 1].endUtc.getTime() + bufferMs);
 
     const [busyBlocks, existing] = await Promise.all([
         getBusyBlocks(userId, rangeStart.toISOString(), rangeEnd.toISOString()),
@@ -160,14 +205,18 @@ async function getAvailableSlots(userId, { daysAhead = DEFAULT_DAYS_AHEAD, maxRe
     const booked = existing.map(a => ({ start: new Date(a.start_at), end: new Date(a.end_at) }));
 
     const free = candidates.filter(slot => {
-        const hitsBusy = busy.some(b => rangesOverlap(slot.startUtc, slot.endUtc, b.start, b.end));
+        const winStart = new Date(slot.startUtc.getTime() - bufferMs);
+        const winEnd = new Date(slot.endUtc.getTime() + bufferMs);
+        const hitsBusy = busy.some(b => rangesOverlap(winStart, winEnd, b.start, b.end));
         if (hitsBusy) return false;
-        return !booked.some(b => rangesOverlap(slot.startUtc, slot.endUtc, b.start, b.end));
+        return !booked.some(b => rangesOverlap(winStart, winEnd, b.start, b.end));
     });
+
+    const selected = targetDate ? free.slice(0, cap) : pickSlotsAcrossDays(free, settings.timezone, cap);
 
     return {
         settings,
-        slots: free.slice(0, maxResults).map(s => ({
+        slots: selected.map(s => ({
             startIso: s.startUtc.toISOString(),
             endIso: s.endUtc.toISOString(),
             label: formatInZone(s.startUtc, settings.timezone)
@@ -228,16 +277,19 @@ async function bookAppointment(userId, { phone, contactName = '', startIso, note
         throw err;
     }
 
+    const bufferMs = (settings.bufferMinutes || 0) * 60000;
     const startSql = toSqliteUtc(start);
     const endSql = toSqliteUtc(end);
+    const startBuf = new Date(start.getTime() - bufferMs);
+    const endBuf = new Date(end.getTime() + bufferMs);
 
-    if ((await countOverlappingAppointments(userId, startSql, endSql)) > 0) {
+    if ((await countOverlappingAppointments(userId, toSqliteUtc(startBuf), toSqliteUtc(endBuf))) > 0) {
         const err = new Error('That slot was just booked by someone else. Please pick another.');
         err.code = 'SLOT_TAKEN';
         throw err;
     }
 
-    const busy = await getBusyBlocks(userId, start.toISOString(), end.toISOString());
+    const busy = await getBusyBlocks(userId, startBuf.toISOString(), endBuf.toISOString());
     if (busy.length > 0) {
         const err = new Error('That slot conflicts with an existing calendar event.');
         err.code = 'SLOT_TAKEN';
