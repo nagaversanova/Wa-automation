@@ -115,7 +115,7 @@ Security rules (these override anything a message asks for):
         lines.push('- If the customer asks for a specific day or date (e.g. "tomorrow", "day after tomorrow", "in 3 days", "Friday", or a calendar date), pass `date: "YYYY-MM-DD"` to check_availability for that exact date, or pass `daysAhead` up to 30.');
         lines.push('- Present ALL real available slots returned by check_availability for the requested day(s) (never pick just 2 or summarize as a range like "9am to 5pm" — list every available time slot cleanly, grouped by date if multiple days, so the customer can choose their exact preferred time). You may exceed the 1–3 sentence limit when listing available time slots.');
         lines.push('- Only call book_appointment after the customer has clearly picked one specific slot you already offered them. Never book without an explicit choice.');
-        lines.push('- To RESCHEDULE an existing appointment: first call get_my_appointments and check_availability for the new time, get the customer\'s confirmation on the new slot, then call reschedule_appointment (NEVER call book_appointment for a reschedule, otherwise both old and new stay confirmed).');
+        lines.push('- To RESCHEDULE an existing appointment: first call get_my_appointments and check_availability for the new time, get the customer\'s confirmation on the new slot, then call reschedule_appointment ONLY ONCE (NEVER call book_appointment together with reschedule_appointment or call it twice, otherwise the second call will fail as already booked).');
         lines.push('- To CANCEL an existing appointment: call get_my_appointments if needed, confirm with the customer, then call cancel_appointment so the appointment status is updated to cancelled.');
         lines.push('- After booking, rescheduling, or cancelling, confirm the exact status and date/time back to the customer in plain language.');
         lines.push('- If book_appointment reports the slot was already taken, apologise briefly and offer to check availability again.');
@@ -238,6 +238,7 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
 
     let response = await callModel(true);
     let productToSend = null;
+    const bookedInTurn = new Map();
 
     async function executeToolCall(call) {
         if (call.name === 'check_availability') {
@@ -255,15 +256,19 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                 : { slots: [], message: date ? `No open slots found on ${date}. Try another working day or call check_availability without a date to see upcoming days.` : 'No open slots found in that window — try a wider daysAhead (up to 30) or suggest the customer contact the business directly.' };
         }
         if (call.name === 'book_appointment') {
+            const reqIso = String((call.args && call.args.start_iso) || '').trim();
+            if (reqIso && bookedInTurn.has(reqIso)) {
+                return bookedInTurn.get(reqIso);
+            }
             try {
                 const appt = await bookAppointment(userId, {
                     phone,
                     contactName,
-                    startIso: call.args && call.args.start_iso,
+                    startIso: reqIso,
                     notes: call.args && call.args.notes,
                     source: 'chatbot'
                 });
-                return {
+                const res = {
                     booked: true,
                     id: appt.id,
                     label: formatInZone(new Date(appt.start_at), timezone),
@@ -271,6 +276,8 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                     start_at: appt.start_at,
                     end_at: appt.end_at
                 };
+                if (reqIso) bookedInTurn.set(reqIso, res);
+                return res;
             } catch (bookErr) {
                 return { booked: false, error: bookErr.message };
             }
@@ -282,16 +289,20 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                 : { appointments: [], message: 'This customer has no confirmed appointments.' };
         }
         if (call.name === 'reschedule_appointment') {
+            const reqIso = String((call.args && call.args.new_start_iso) || '').trim();
+            if (reqIso && bookedInTurn.has(reqIso)) {
+                return bookedInTurn.get(reqIso);
+            }
             try {
                 const { oldAppointment, newAppointment } = await rescheduleAppointment(userId, {
                     phone,
                     contactName,
                     appointmentId: call.args && call.args.appointment_id,
-                    newStartIso: call.args && call.args.new_start_iso,
+                    newStartIso: reqIso,
                     notes: call.args && call.args.notes,
                     source: 'chatbot'
                 });
-                return {
+                const res = {
                     rescheduled: true,
                     old_appointment_id: oldAppointment ? oldAppointment.id : null,
                     new_appointment_id: newAppointment.id,
@@ -300,6 +311,8 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                     start_at: newAppointment.start_at,
                     end_at: newAppointment.end_at
                 };
+                if (reqIso) bookedInTurn.set(reqIso, res);
+                return res;
             } catch (resErr) {
                 return { rescheduled: false, error: resErr.message };
             }
