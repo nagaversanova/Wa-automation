@@ -141,6 +141,16 @@ function clearStaleLocks(userId) {
     } catch (e) {
         // Auth dir may not exist yet on first run — that's fine
     }
+
+    // Clear Chromium's Service Worker cache so a previously cached /login/
+    // service worker cannot hijack web.whatsapp.com and bypass webVersionCache.
+    // Auth keys live in IndexedDB/Local Storage, so this preserves logged-in sessions.
+    const defaultProfile = path.join(authDir, 'session', 'Default');
+    for (const sub of ['Service Worker', 'Cache', 'Code Cache']) {
+        try {
+            fs.rmSync(path.join(defaultProfile, sub), { recursive: true, force: true });
+        } catch (_) {}
+    }
 }
 
 // ─── SSE broadcast (scoped to one user's listeners) ────────────
