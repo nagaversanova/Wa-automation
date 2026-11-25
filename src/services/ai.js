@@ -218,9 +218,9 @@ function buildTools({ bookingEnabled, hasProducts }) {
     return decls.length ? [{ functionDeclarations: decls }] : null;
 }
 
-const MAX_TOOL_ROUNDS = 3;
+const MAX_TOOL_ROUNDS = 5;
 
-async function generateReplyWithTools({ userId, phone, contactName, systemInstruction, contents, tools }) {
+async function generateReplyWithTools({ userId, phone, contactName, systemInstruction, contents, tools, timezone = 'Asia/Kolkata' }) {
     const callModel = () => callGeminiWithRetry(
         userId,
         (client, model) => client.models.generateContent({
@@ -265,7 +265,14 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                         notes: call.args && call.args.notes,
                         source: 'chatbot'
                     });
-                    result = { booked: true, id: appt.id, start_at: appt.start_at, end_at: appt.end_at };
+                    result = {
+                        booked: true,
+                        id: appt.id,
+                        label: formatInZone(new Date(appt.start_at), timezone),
+                        timezone,
+                        start_at: appt.start_at,
+                        end_at: appt.end_at
+                    };
                 } catch (bookErr) {
                     result = { booked: false, error: bookErr.message };
                 }
@@ -288,6 +295,8 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                         rescheduled: true,
                         old_appointment_id: oldAppointment ? oldAppointment.id : null,
                         new_appointment_id: newAppointment.id,
+                        label: formatInZone(new Date(newAppointment.start_at), timezone),
+                        timezone,
                         start_at: newAppointment.start_at,
                         end_at: newAppointment.end_at
                     };
@@ -300,7 +309,13 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                         phone,
                         appointmentId: call.args && call.args.appointment_id
                     });
-                    result = { cancelled: true, id: cancelled.id, start_at: cancelled.start_at };
+                    result = {
+                        cancelled: true,
+                        id: cancelled.id,
+                        label: formatInZone(new Date(cancelled.start_at), timezone),
+                        timezone,
+                        start_at: cancelled.start_at
+                    };
                 } catch (cancelErr) {
                     result = { cancelled: false, error: cancelErr.message };
                 }
@@ -434,7 +449,7 @@ async function generateReply(userId, systemPrompt, conversationHistory, contactN
     let reply;
     if (tools) {
         reply = await generateReplyWithTools({
-            userId, phone, contactName, systemInstruction, contents, tools
+            userId, phone, contactName, systemInstruction, contents, tools, timezone: availSettings.timezone
         });
     } else {
         const response = await callGeminiWithRetry(
