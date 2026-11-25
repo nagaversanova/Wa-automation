@@ -410,23 +410,17 @@ async function initWhatsAppClient(userId) {
     try {
         s.client = new Client({
             authStrategy: new LocalAuth({ dataPath: authDataPath(userId) }),
+            authTimeoutMs: 90000,
             restartOnAuthFail: true,
             takeoverOnConflict: true,
             takeoverTimeoutMs: 0,
-            // A local cache (bundled with whatsapp-web.js, tested against the
-            // exact library version installed) instead of a hardcoded remote
-            // fetch: the previous config pinned an old WhatsApp Web build
-            // (2.2412.54) fetched from GitHub on every single connection
-            // attempt — a stale/deprecated version and an extra network
-            // dependency in the critical path of "show the QR code", and a
-            // real cause of the QR taking a long time (or never appearing)
-            // if that fetch is slow or GitHub is unreachable. Local cache
-            // reads whatever the last successful session already saved to
-            // .wwebjs_cache/, and transparently fetches live from
-            // web.whatsapp.com only when nothing cached matches — no GitHub
-            // dependency, no stale pin.
+            // Pin to the latest WhatsApp Web build prior to the /login/ redirect
+            // (builds >= 2.3000.1055852612 redirect logged-out sessions to /login/
+            // where WAWebSocketModel is null, breaking whatsapp-web.js QR init).
+            webVersion: '2.3000.1055837054-alpha',
             webVersionCache: {
-                type: 'none'
+                type: 'remote',
+                remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html'
             },
             puppeteer: {
                 headless: 'new',
