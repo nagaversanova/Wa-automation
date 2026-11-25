@@ -21,7 +21,7 @@
  */
 const {
     getAvailabilitySettings, saveAvailabilitySettings, countOverlappingAppointments,
-    listAppointments, createAppointment, countAppointments,
+    listAppointments, listCustomerConfirmedAppointments, createAppointment, countAppointments,
     cancelAppointment: dbCancelAppointment
 } = require('./database');
 const { getBusyBlocks, createAppointmentEvent, cancelAppointmentEvent } = require('./google-calendar');
@@ -316,13 +316,83 @@ async function bookAppointment(userId, { phone, contactName = '', startIso, note
     return appointment;
 }
 
-/** Cancels an appointment and best-effort removes its calendar event. Returns the cancelled row, or null if it didn't exist. */
-async function cancelAppointment(userId, id) {
-    const row = await dbCancelAppointment(userId, id);
+/** Lists a customer's confirmed appointments formatted in the business timezone. */
+async function getCustomerAppointments(userId, phone) {
+    if (!phone) return [];
+    const [settings, rows] = await Promise.all([
+        getSettings(userId),
+        listCustomerConfirmedAppointments(userId, phone)
+    ]);
+    return rows.map(r => ({
+        id: r.id,
+        startIso: new Date(r.start_at).toISOString(),
+        endIso: new Date(r.end_at).toISOString(),
+        label: formatInZone(new Date(r.start_at), settings.timezone),
+        notes: r.notes || ''
+    }));
+}
+
+/** Cancels an appointment (or marks it rescheduled) and best-effort removes its calendar event. */
+async function cancelAppointment(userId, id, newStatus = 'cancelled') {
+    const row = await dbCancelAppointment(userId, id, newStatus);
     if (row && row.calendar_event_id) {
         await cancelAppointmentEvent(userId, row.calendar_event_id);
     }
     return row;
+}
+
+/** Finds and cancels a customer's confirmed appointment by ID or earliest upcoming. */
+async function cancelCustomerAppointment(userId, { phone, appointmentId = null }) {
+    if (!phone) throw new ValidationError('phone is required.', 'phone');
+    const confirmed = await listCustomerConfirmedAppointments(userId, phone);
+    if (!confirmed.length) {
+        const err = new Error('No confirmed appointment found for this customer.');
+        err.code = 'NOT_FOUND';
+        throw err;
+    }
+    const target = appointmentId
+        ? confirmed.find(a => Number(a.id) === Number(appointmentId))
+        : (confirmed.find(a => new Date(a.start_at).getTime() >= Date.now()) || confirmed[0]);
+    if (!target) {
+        const err = new Error('That confirmed appointment was not found for this customer.');
+        err.code = 'NOT_FOUND';
+        throw err;
+    }
+    return await cancelAppointment(userId, target.id, 'cancelled');
+}
+
+/**
+ * Reschedules a customer's confirmed appointment: books the new slot first
+ * (so a conflict never drops the existing booking), then marks the old one
+ * as 'rescheduled' and removes its old Google Calendar event.
+ */
+async function rescheduleAppointment(userId, { phone, contactName = '', appointmentId = null, newStartIso, notes = '', source = 'chatbot' }) {
+    if (!phone) throw new ValidationError('phone is required.', 'phone');
+    const confirmed = await listCustomerConfirmedAppointments(userId, phone);
+    if (!confirmed.length) {
+        const err = new Error('No confirmed appointment found to reschedule.');
+        err.code = 'NOT_FOUND';
+        throw err;
+    }
+    const oldAppt = appointmentId
+        ? confirmed.find(a => Number(a.id) === Number(appointmentId))
+        : (confirmed.find(a => new Date(a.start_at).getTime() >= Date.now()) || confirmed[0]);
+    if (!oldAppt) {
+        const err = new Error('That confirmed appointment was not found to reschedule.');
+        err.code = 'NOT_FOUND';
+        throw err;
+    }
+
+    const newAppointment = await bookAppointment(userId, {
+        phone,
+        contactName: contactName || oldAppt.contact_name || '',
+        startIso: newStartIso,
+        notes: notes || oldAppt.notes || '',
+        source
+    });
+
+    const oldAppointment = await cancelAppointment(userId, oldAppt.id, 'rescheduled');
+    return { oldAppointment, newAppointment };
 }
 
 module.exports = {
@@ -330,6 +400,9 @@ module.exports = {
     getSettings,
     saveSettings,
     getAvailableSlots,
+    getCustomerAppointments,
     bookAppointment,
-    cancelAppointment
+    cancelAppointment,
+    cancelCustomerAppointment,
+    rescheduleAppointment
 };

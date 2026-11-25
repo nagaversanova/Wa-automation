@@ -2216,7 +2216,7 @@ async function loadAppointments() {
                     <td style="white-space:nowrap;color:var(--color-text-secondary)">${formatAppointmentRange(a.start_at, a.end_at, tz)}</td>
                     <td>${a.source === 'chatbot' ? Icon('bot', 'icon-inline') + ' Chatbot' : Icon('user', 'icon-inline') + ' Manual'}</td>
                     <td>
-                        <span class="pill pill-${a.status === 'confirmed' ? 'active' : 'error'}">${escapeHtml(a.status)}</span>
+                        <span class="pill pill-${a.status === 'confirmed' ? 'active' : a.status === 'rescheduled' ? 'pending' : 'error'}">${escapeHtml(a.status)}</span>
                     </td>
                     <td>
                         ${a.status === 'confirmed'

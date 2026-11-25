@@ -148,7 +148,7 @@ async function closeDatabase() {
 
 // Legacy alias for compatibility with test teardowns
 function stopPersistence() {
-    closePool().catch(() => {});
+    closePool().catch(() => { });
 }
 
 // Legacy alias: in PostgreSQL, WAL / transaction commit makes writes durable immediately
@@ -870,7 +870,7 @@ async function createProduct(userId, { name, description = '', price = '', categ
             if (fullPath && fs.existsSync(fullPath)) {
                 finalImageData = fs.readFileSync(fullPath).toString('base64');
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     const res = await query(
@@ -896,7 +896,7 @@ async function updateProduct(userId, id, fields) {
                 if (fullPath && fs.existsSync(fullPath)) {
                     updatedFields.image_data = fs.readFileSync(fullPath).toString('base64');
                 }
-            } catch (_) {}
+            } catch (_) { }
         }
     }
 
@@ -1115,7 +1115,7 @@ async function saveLeadAnalysis(userId, phone, analysis) {
             last_analyzed_at = CURRENT_TIMESTAMP
          RETURNING *`,
         [userId, phone, contactName, summary, interestStatus, interestScore, sentiment,
-         issueCategory, JSON.stringify(issues), priority, priorityReason, nextAction, messageCount]
+            issueCategory, JSON.stringify(issues), priority, priorityReason, nextAction, messageCount]
     );
     return res.rows[0];
 }
@@ -1358,11 +1358,21 @@ async function getAppointmentById(userId, id) {
     return queryGet('SELECT * FROM appointments WHERE id = $1 AND user_id = $2', [id, userId]);
 }
 
-async function cancelAppointment(userId, id) {
+async function listCustomerConfirmedAppointments(userId, phone) {
+    return queryAll(
+        `SELECT * FROM appointments
+         WHERE user_id = $1 AND phone = $2 AND status = 'confirmed'
+         ORDER BY start_at ASC`,
+        [userId, phone]
+    );
+}
+
+async function cancelAppointment(userId, id, newStatus = 'cancelled') {
+    const status = newStatus === 'rescheduled' ? 'rescheduled' : 'cancelled';
     const row = await queryGet("SELECT * FROM appointments WHERE id = $1 AND user_id = $2 AND status = 'confirmed'", [id, userId]);
     if (!row) return null;
-    await runSql("UPDATE appointments SET status = 'cancelled' WHERE id = $1 AND user_id = $2", [id, userId]);
-    return row;
+    await runSql('UPDATE appointments SET status = $1 WHERE id = $2 AND user_id = $3', [status, id, userId]);
+    return { ...row, status };
 }
 
 // ─── Dashboard Stats ────────────────────────────────────────
@@ -1507,5 +1517,6 @@ module.exports = {
     countAppointments,
     createAppointment,
     getAppointmentById,
+    listCustomerConfirmedAppointments,
     cancelAppointment
 };

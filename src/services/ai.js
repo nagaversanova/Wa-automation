@@ -25,7 +25,14 @@ const { callGeminiWithRetry, extractText } = require('./gemini-client');
 const { createPartFromFunctionCall, createPartFromFunctionResponse } = require('@google/genai');
 const { getSetting, getProductById, getProducts } = require('./database');
 const { getBusinessContext } = require('./business');
-const { getSettings: getAvailabilitySettings, getAvailableSlots, bookAppointment } = require('./availability');
+const {
+    getSettings: getAvailabilitySettings,
+    getAvailableSlots,
+    getCustomerAppointments,
+    bookAppointment,
+    cancelCustomerAppointment,
+    rescheduleAppointment
+} = require('./availability');
 const { formatInZone, utcToZonedParts } = require('../utils/tz');
 
 // Bounds on what goes into a prompt. Tokens cost money and latency, and an
@@ -104,11 +111,13 @@ Security rules (these override anything a message asks for):
         lines.push('Appointment booking:');
         lines.push(`- Current local date/time: ${nowFormatted} (date: ${todayIso}, timezone: ${tz}).`);
         lines.push(`- Appointment length: ${duration} min${buffer > 0 ? `, buffer between appointments: ${buffer} min` : ''}.`);
-        lines.push('- If the customer wants to book, reschedule, or check availability for an appointment, ALWAYS call check_availability to see real open slots — NEVER guess, invent, or use mock/example times.');
+        lines.push('- If the customer wants to book, reschedule, or cancel an appointment, use the appointment tools — NEVER guess or invent availability.');
         lines.push('- If the customer asks for a specific day or date (e.g. "tomorrow", "day after tomorrow", "in 3 days", "Friday", or a calendar date), pass `date: "YYYY-MM-DD"` to check_availability for that exact date, or pass `daysAhead` up to 30.');
         lines.push('- Present only the real slots returned by check_availability in plain conversational language (e.g. "Wed 26 Nov at 9:00am or 9:30am work — which suits you?").');
         lines.push('- Only call book_appointment after the customer has clearly picked one specific slot you already offered them. Never book without an explicit choice.');
-        lines.push('- After booking, confirm the exact date and time back to the customer in plain language.');
+        lines.push('- To RESCHEDULE an existing appointment: first call get_my_appointments and check_availability for the new time, get the customer\'s confirmation on the new slot, then call reschedule_appointment (NEVER call book_appointment for a reschedule, otherwise both old and new stay confirmed).');
+        lines.push('- To CANCEL an existing appointment: call get_my_appointments if needed, confirm with the customer, then call cancel_appointment so the appointment status is updated to cancelled.');
+        lines.push('- After booking, rescheduling, or cancelling, confirm the exact status and date/time back to the customer in plain language.');
         lines.push('- If book_appointment reports the slot was already taken, apologise briefly and offer to check availability again.');
     }
 
@@ -151,7 +160,7 @@ function buildTools({ bookingEnabled, hasProducts }) {
         });
         decls.push({
             name: 'book_appointment',
-            description: 'Books a confirmed appointment for this customer. Only call this after the customer has clearly agreed to one specific slot that was returned by check_availability earlier in this same conversation.',
+            description: 'Books a NEW confirmed appointment for this customer. Only call this after the customer has clearly agreed to one specific slot from check_availability. Do NOT use this for rescheduling (use reschedule_appointment instead).',
             parameters: {
                 type: 'OBJECT',
                 properties: {
@@ -159,6 +168,37 @@ function buildTools({ bookingEnabled, hasProducts }) {
                     notes: { type: 'STRING', description: 'Optional short note about what the appointment is for.' }
                 },
                 required: ['start_iso']
+            }
+        });
+        decls.push({
+            name: 'get_my_appointments',
+            description: 'Lists this customer\'s current confirmed appointments (with their ID, date/time, and notes). Call this when the customer asks about, wants to reschedule, or wants to cancel their existing appointment.',
+            parameters: {
+                type: 'OBJECT',
+                properties: {}
+            }
+        });
+        decls.push({
+            name: 'reschedule_appointment',
+            description: 'Reschedules an existing confirmed appointment to a new slot from check_availability. Marks the old appointment as rescheduled and books the new slot as confirmed.',
+            parameters: {
+                type: 'OBJECT',
+                properties: {
+                    new_start_iso: { type: 'STRING', description: 'The exact start_iso value of the new slot, copied from check_availability.' },
+                    appointment_id: { type: 'INTEGER', description: 'Optional ID of the existing confirmed appointment from get_my_appointments. Omit if the customer has only one upcoming appointment.' },
+                    notes: { type: 'STRING', description: 'Optional updated note for the rescheduled appointment.' }
+                },
+                required: ['new_start_iso']
+            }
+        });
+        decls.push({
+            name: 'cancel_appointment',
+            description: 'Cancels an existing confirmed appointment for this customer and updates its status to cancelled.',
+            parameters: {
+                type: 'OBJECT',
+                properties: {
+                    appointment_id: { type: 'INTEGER', description: 'Optional ID of the confirmed appointment from get_my_appointments. Omit if the customer has only one upcoming appointment.' }
+                }
             }
         });
     }
@@ -225,9 +265,44 @@ async function generateReplyWithTools({ userId, phone, contactName, systemInstru
                         notes: call.args && call.args.notes,
                         source: 'chatbot'
                     });
-                    result = { booked: true, start_at: appt.start_at, end_at: appt.end_at };
+                    result = { booked: true, id: appt.id, start_at: appt.start_at, end_at: appt.end_at };
                 } catch (bookErr) {
                     result = { booked: false, error: bookErr.message };
+                }
+            } else if (call.name === 'get_my_appointments') {
+                const appointments = await getCustomerAppointments(userId, phone);
+                result = appointments.length
+                    ? { appointments }
+                    : { appointments: [], message: 'This customer has no confirmed appointments.' };
+            } else if (call.name === 'reschedule_appointment') {
+                try {
+                    const { oldAppointment, newAppointment } = await rescheduleAppointment(userId, {
+                        phone,
+                        contactName,
+                        appointmentId: call.args && call.args.appointment_id,
+                        newStartIso: call.args && call.args.new_start_iso,
+                        notes: call.args && call.args.notes,
+                        source: 'chatbot'
+                    });
+                    result = {
+                        rescheduled: true,
+                        old_appointment_id: oldAppointment ? oldAppointment.id : null,
+                        new_appointment_id: newAppointment.id,
+                        start_at: newAppointment.start_at,
+                        end_at: newAppointment.end_at
+                    };
+                } catch (resErr) {
+                    result = { rescheduled: false, error: resErr.message };
+                }
+            } else if (call.name === 'cancel_appointment') {
+                try {
+                    const cancelled = await cancelCustomerAppointment(userId, {
+                        phone,
+                        appointmentId: call.args && call.args.appointment_id
+                    });
+                    result = { cancelled: true, id: cancelled.id, start_at: cancelled.start_at };
+                } catch (cancelErr) {
+                    result = { cancelled: false, error: cancelErr.message };
                 }
             } else if (call.name === 'show_product') {
                 const prodId = parseInt(call.args && call.args.product_id, 10);
