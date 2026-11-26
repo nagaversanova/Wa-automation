@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS appointments (
     contact_name TEXT DEFAULT '',
     start_at TIMESTAMPTZ NOT NULL,
     end_at TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('confirmed', 'cancelled')),
+    status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('confirmed', 'cancelled', 'rescheduled')),
     source TEXT NOT NULL DEFAULT 'chatbot' CHECK(source IN ('chatbot', 'dashboard')),
     notes TEXT DEFAULT '',
     calendar_event_id TEXT,

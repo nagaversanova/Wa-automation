@@ -391,8 +391,14 @@ async function rescheduleAppointment(userId, { phone, contactName = '', appointm
         source
     });
 
-    const oldAppointment = await cancelAppointment(userId, oldAppt.id, 'rescheduled');
-    return { oldAppointment, newAppointment };
+    try {
+        const oldAppointment = await cancelAppointment(userId, oldAppt.id, 'rescheduled');
+        return { oldAppointment, newAppointment };
+    } catch (err) {
+        // Roll back the new booking so a failed status update never leaves two confirmed slots.
+        await cancelAppointment(userId, newAppointment.id, 'cancelled').catch(() => {});
+        throw err;
+    }
 }
 
 module.exports = {
