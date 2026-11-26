@@ -12,10 +12,10 @@
  * most expensive:
  *   1. Inside the account's configured working hours for that weekday.
  *   2. Not already claimed by another row in our own `appointments` table
- *      (this is what makes booking correct even when Google Calendar isn't
+ *      (this is what makes booking correct even when Google Calendar ( coming soon ) isn't
  *      connected, and is re-checked at booking time to close the race
  *      between "list slots" and "book slot").
- *   3. Not busy on the account's Google Calendar, if one is connected
+ *   3. Not busy on the account's Google Calendar ( coming soon ), if one is connected
  *      (best-effort — see google-calendar.js; a Calendar outage never
  *      blocks a booking that the internal table would otherwise allow).
  */
@@ -173,7 +173,7 @@ function pickSlotsAcrossDays(free, timeZone, maxResults) {
 /**
  * Live, bookable slots for the next `daysAhead` days (or a specific `date` YYYY-MM-DD):
  * working hours minus whatever's already booked internally and (best-effort) busy on
- * Google Calendar, respecting both slot duration and bufferMinutes.
+ * Google Calendar ( coming soon ), respecting both slot duration and bufferMinutes.
  */
 async function getAvailableSlots(userId, { daysAhead = DEFAULT_DAYS_AHEAD, maxResults = DEFAULT_MAX_RESULTS, date = null } = {}) {
     const targetDate = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim()) ? date.trim() : null;
@@ -196,8 +196,8 @@ async function getAvailableSlots(userId, { daysAhead = DEFAULT_DAYS_AHEAD, maxRe
         getBusyBlocks(userId, rangeStart.toISOString(), rangeEnd.toISOString()),
         listAppointments(userId, {
             status: 'confirmed',
-            fromAt: toSqliteUtc(rangeStart),
-            toAt: toSqliteUtc(rangeEnd)
+            fromAt: rangeStart.toISOString(),
+            toAt: rangeEnd.toISOString()
         })
     ]);
 
@@ -278,12 +278,12 @@ async function bookAppointment(userId, { phone, contactName = '', startIso, note
     }
 
     const bufferMs = (settings.bufferMinutes || 0) * 60000;
-    const startSql = toSqliteUtc(start);
-    const endSql = toSqliteUtc(end);
+    const startSql = start.toISOString();
+    const endSql = end.toISOString();
     const startBuf = new Date(start.getTime() - bufferMs);
     const endBuf = new Date(end.getTime() + bufferMs);
 
-    if ((await countOverlappingAppointments(userId, toSqliteUtc(startBuf), toSqliteUtc(endBuf))) > 0) {
+    if ((await countOverlappingAppointments(userId, startBuf.toISOString(), endBuf.toISOString())) > 0) {
         const err = new Error('That slot was just booked by someone else. Please pick another.');
         err.code = 'SLOT_TAKEN';
         throw err;
@@ -364,7 +364,7 @@ async function cancelCustomerAppointment(userId, { phone, appointmentId = null }
 /**
  * Reschedules a customer's confirmed appointment: books the new slot first
  * (so a conflict never drops the existing booking), then marks the old one
- * as 'rescheduled' and removes its old Google Calendar event.
+ * as 'rescheduled' and removes its old Google Calendar ( coming soon ) event.
  */
 async function rescheduleAppointment(userId, { phone, contactName = '', appointmentId = null, newStartIso, notes = '', source = 'chatbot' }) {
     if (!phone) throw new ValidationError('phone is required.', 'phone');

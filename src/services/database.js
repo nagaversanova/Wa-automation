@@ -1203,7 +1203,7 @@ async function getAllSettings(userId) {
     return settings;
 }
 
-// ─── Google Calendar Helpers ────────────────────────────────
+// ─── Google Calendar ( coming soon ) Helpers ────────────────────────────────
 
 async function saveGoogleCalendarTokens(userId, tokens) {
     const existing = await queryGet('SELECT calendar_id, check_availability FROM google_calendar_accounts WHERE user_id = $1', [userId]);
@@ -1314,7 +1314,7 @@ async function listAppointments(userId, { status = null, fromAt = null, toAt = n
         sql += ` AND start_at <= $${idx++}`;
         params.push(toAt);
     }
-    sql += ` ORDER BY start_at ASC LIMIT $${idx++}`;
+    sql += ` ORDER BY CASE WHEN status = 'confirmed' THEN 0 WHEN status = 'rescheduled' THEN 1 ELSE 2 END, start_at DESC LIMIT $${idx++}`;
     params.push(limit);
     return queryAll(sql, params);
 }
@@ -1500,7 +1500,7 @@ module.exports = {
     getCrmAnalytics,
     addCrmActivity,
     getCrmActivities,
-    // Google Calendar
+    // Google Calendar ( coming soon )
     saveGoogleCalendarTokens,
     getGoogleCalendarAccount,
     getAllConnectedCalendarUserIds,

@@ -94,7 +94,8 @@ function getPoolConfig() {
         connectionTimeoutMillis,
         idleTimeoutMillis,
         statement_timeout: statementTimeout,
-        query_timeout: queryTimeout
+        query_timeout: queryTimeout,
+        options: '-c timezone=UTC'
     };
 
     // Determine TLS settings
