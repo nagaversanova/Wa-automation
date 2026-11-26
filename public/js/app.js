@@ -2436,7 +2436,7 @@ function initBookingSettings() {
     });
 }
 
-// ─── Google Calendar ────────────────────────────────────────
+// ─── Google Calendar ( coming soon ) ────────────────────────────────────────
 async function loadCalendarStatus() {
     const statusEl = document.getElementById('calendarStatus');
     const notConfiguredEl = document.getElementById('calendarNotConfigured');
@@ -2493,7 +2493,7 @@ function initCalendarSettings() {
             // postMessage the moment the OAuth flow finishes.
             window.open(data.url, 'google-calendar-connect', 'width=520,height=680');
         } catch (err) {
-            showToast(err.message || 'Could not start Google Calendar connection', 'error');
+            showToast(err.message || 'Could not start Google Calendar ( coming soon ) connection', 'error');
         }
     });
 
@@ -2511,10 +2511,10 @@ function initCalendarSettings() {
     });
 
     disconnectBtn.addEventListener('click', async () => {
-        if (!confirm('Disconnect Google Calendar? Outreach will stop being logged and calendar events will no longer be imported.')) return;
+        if (!confirm('Disconnect Google Calendar ( coming soon )? Outreach will stop being logged and calendar events will no longer be imported.')) return;
         try {
             await api('/api/calendar/disconnect', { method: 'POST' });
-            showToast('Google Calendar disconnected', 'success');
+            showToast('Google Calendar ( coming soon ) disconnected', 'success');
             loadCalendarStatus();
         } catch (err) {
             showToast(err.message || 'Could not disconnect', 'error');
@@ -2539,8 +2539,8 @@ function initCalendarSettings() {
     window.addEventListener('message', (event) => {
         if (event.origin !== window.location.origin) return;
         if (event.data && event.data.type === 'google-calendar-connected') {
-            if (event.data.ok) showToast('Google Calendar connected', 'success');
-            else showToast(event.data.message || 'Could not connect Google Calendar', 'error');
+            if (event.data.ok) showToast('Google Calendar ( coming soon ) connected', 'success');
+            else showToast(event.data.message || 'Could not connect Google Calendar ( coming soon )', 'error');
             loadCalendarStatus();
         }
     });
@@ -2878,6 +2878,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!btn) return;
         const id = parseInt(btn.dataset.id, 10);
         cancelAppointment(id);
+    });
+
+    document.getElementById('clearAppointmentsBtn')?.addEventListener('click', async () => {
+        if (!confirm('Remove all cancelled and rescheduled appointments from the list?')) return;
+        const btn = document.getElementById('clearAppointmentsBtn');
+        if (btn) btn.disabled = true;
+        try {
+            const data = await api('/api/appointments/clear', { method: 'DELETE' });
+            const n = data && typeof data.deleted === 'number' ? data.deleted : 0;
+            showToast(n > 0 ? `Cleared ${n} appointment(s)` : 'No cancelled appointments to clear', 'success');
+            loadAppointments();
+        } catch (err) {
+            showToast(err.message || 'Failed to clear appointments', 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     });
 
     // 7. Leads List (Pending and Cards)

@@ -829,7 +829,10 @@
                 </div>
 
                 <div class="card">
-                    <h2 class="card-title">Upcoming &amp; Past Appointments</h2>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+                        <h2 class="card-title" style="margin-bottom:0;">Upcoming &amp; Past Appointments</h2>
+                        <button type="button" class="btn btn-sm btn-ghost" id="clearAppointmentsBtn" title="Remove cancelled and rescheduled appointments">Clear Cancelled</button>
+                    </div>
                     <div class="table-container">
                         <table class="data-table" aria-label="Appointments list">
                             <thead>
@@ -1709,7 +1712,7 @@
 
     <script src="js/chart.umd.min.js"></script>
     <script src="js/icons.js"></script>
-    <script src="js/app.js?v=20261126_vn1"></script>
+    <script src="js/app.js?v=20261126_vn2"></script>
 </body>
 
 </html>

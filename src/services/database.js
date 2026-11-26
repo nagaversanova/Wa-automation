@@ -1375,6 +1375,14 @@ async function cancelAppointment(userId, id, newStatus = 'cancelled') {
     return { ...row, status };
 }
 
+async function clearInactiveAppointments(userId) {
+    const res = await runSql(
+        "DELETE FROM appointments WHERE user_id = $1 AND status IN ('cancelled', 'rescheduled')",
+        [userId]
+    );
+    return res && typeof res.changes === 'number' ? res.changes : 0;
+}
+
 // ─── Dashboard Stats ────────────────────────────────────────
 
 async function getDashboardStats(userId) {
@@ -1518,5 +1526,6 @@ module.exports = {
     createAppointment,
     getAppointmentById,
     listCustomerConfirmedAppointments,
-    cancelAppointment
+    cancelAppointment,
+    clearInactiveAppointments
 };

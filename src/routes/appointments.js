@@ -11,7 +11,7 @@ const express = require('express');
 const router = express.Router();
 
 const { getSettings, saveSettings, getAvailableSlots, bookAppointment, cancelAppointment } = require('../services/availability');
-const { listAppointments, countAppointments, assertPersistable } = require('../services/database');
+const { listAppointments, countAppointments, clearInactiveAppointments, assertPersistable } = require('../services/database');
 const { asyncHandler } = require('../utils/errors');
 const { perUser } = require('../middleware/rateLimit');
 const { ValidationError, requireId, normalizePhone, optionalString, LIMITS } = require('../utils/validate');
@@ -99,6 +99,11 @@ router.post('/', writeLimiter, requireDurableWrite, asyncHandler(async (req, res
         }
         throw err;
     }
+}));
+
+router.delete('/clear', writeLimiter, requireDurableWrite, asyncHandler(async (req, res) => {
+    const deleted = await clearInactiveAppointments(req.user.id);
+    res.json({ success: true, data: { deleted } });
 }));
 
 router.delete('/:id', writeLimiter, asyncHandler(async (req, res) => {
